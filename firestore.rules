@@ -1,0 +1,179 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isEmailVerified() && request.auth.token.email == 'apros.baguio@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isEmailVerified() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidCategory(cat) {
+      return cat in [
+        'services',
+        'offices',
+        'officials',
+        'barangays',
+        'transparency',
+        'budgets',
+        'procurement',
+        'projects',
+        'ordinances',
+        'resolutions',
+        'documents',
+        'announcements',
+        'sources'
+      ];
+    }
+
+    function isValidVerificationStatus(status) {
+      return status in ['Verified', 'Needs Review', 'Outdated', 'Unavailable'];
+    }
+
+    function isValidCivicRecord(data, recordId) {
+      return data.keys().hasAll([
+        'recordId',
+        'category',
+        'title',
+        'verificationStatus',
+        'isBaselineOverride',
+        'isDeleted',
+        'payload',
+        'updatedByUid',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'recordId',
+        'category',
+        'title',
+        'verificationStatus',
+        'verificationNotes',
+        'isBaselineOverride',
+        'isDeleted',
+        'payload',
+        'updatedByUid',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.recordId is string &&
+      data.recordId == recordId &&
+      isValidCategory(data.category) &&
+      data.title is string &&
+      data.title.size() >= 1 &&
+      data.title.size() <= 300 &&
+      isValidVerificationStatus(data.verificationStatus) &&
+      (!('verificationNotes' in data) || (data.verificationNotes is string && data.verificationNotes.size() <= 1000)) &&
+      data.isBaselineOverride is bool &&
+      data.isDeleted is bool &&
+      data.payload is map &&
+      data.payload.keys().size() <= 30 &&
+      data.updatedByUid is string &&
+      data.updatedByUid == request.auth.uid &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidAdminUser(data, adminUid) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'role', 'createdAt']) &&
+        data.uid is string &&
+        data.uid == adminUid &&
+        data.email is string &&
+        data.email.size() >= 3 &&
+        data.email.size() <= 200 &&
+        data.role == 'admin' &&
+        data.createdAt is timestamp;
+    }
+
+    // Startup connectivity probe
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Admin registry (PII-isolated)
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && (
+        isBootstrappedAdmin() || (isEmailVerified() && request.auth.uid == adminUid)
+      );
+      allow list: if isBootstrappedAdmin();
+      allow create: if isBootstrappedAdmin() &&
+        isValidId(adminUid) &&
+        isValidAdminUser(incoming(), adminUid) &&
+        incoming().createdAt == request.time;
+      allow update: if isBootstrappedAdmin() &&
+        isValidId(adminUid) &&
+        isValidAdminUser(incoming(), adminUid) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if isBootstrappedAdmin() && isValidId(adminUid);
+    }
+
+    // Public Civic Records & Admin Overrides
+    match /civic_records/{recordId} {
+      allow get: if isValidId(recordId);
+      allow list: if resource.data.isDeleted in [false, true];
+
+      allow create: if isSignedIn() &&
+        isValidId(recordId) &&
+        isValidCivicRecord(incoming(), recordId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isSignedIn() &&
+        isValidId(recordId) &&
+        isValidCivicRecord(incoming(), recordId) &&
+        incoming().recordId == existing().recordId &&
+        incoming().category == existing().category &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'verificationStatus',
+          'verificationNotes',
+          'isBaselineOverride',
+          'isDeleted',
+          'payload',
+          'updatedByUid',
+          'updatedAt'
+        ]) &&
+        isAdmin();
+
+      allow delete: if isSignedIn() &&
+        isValidId(recordId) &&
+        isAdmin();
+    }
+  }
+}

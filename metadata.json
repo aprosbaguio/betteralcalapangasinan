@@ -1,0 +1,6 @@
+{
+  "name": "BetterAlcala",
+  "description": "Independent civic transparency, public services, and open municipal records platform for Alcala, Pangasinan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

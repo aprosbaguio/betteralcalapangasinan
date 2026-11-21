@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "CivicRecord": {
+      "title": "CivicRecord",
+      "description": "Publicly readable civic transparency record override or addition managed by verified administrators across BetterAlcala categories.",
+      "type": "object",
+      "properties": {
+        "recordId": {
+          "type": "string",
+          "description": "Unique identifier matching the document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "category": {
+          "type": "string",
+          "description": "Module category of the civic record.",
+          "enum": [
+            "services",
+            "offices",
+            "officials",
+            "barangays",
+            "transparency",
+            "budgets",
+            "procurement",
+            "projects",
+            "ordinances",
+            "resolutions",
+            "documents",
+            "announcements",
+            "sources"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title or name of the civic record.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "verificationStatus": {
+          "type": "string",
+          "description": "Verification status of the record.",
+          "enum": ["Verified", "Needs Review", "Outdated", "Unavailable"]
+        },
+        "verificationNotes": {
+          "type": "string",
+          "description": "Editorial verification rationale or citation note.",
+          "maxLength": 1000
+        },
+        "isBaselineOverride": {
+          "type": "boolean",
+          "description": "True when overriding or suppressing a static baseline record."
+        },
+        "isDeleted": {
+          "type": "boolean",
+          "description": "True when an admin has removed a baseline record from public views."
+        },
+        "payload": {
+          "type": "object",
+          "description": "Structured category-specific fields stored as a native Firestore map."
+        },
+        "updatedByUid": {
+          "type": "string",
+          "description": "UID of the authenticated admin who last modified this record.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-updated timestamp."
+        }
+      },
+      "required": [
+        "recordId",
+        "category",
+        "title",
+        "verificationStatus",
+        "isBaselineOverride",
+        "isDeleted",
+        "payload",
+        "updatedByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized BetterAlcala administrator profile (isolated from public reads for PII protection).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified administrator email address.",
+          "maxLength": 200
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"],
+          "description": "Administrative role."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    },
+    "ConnectionProbe": {
+      "title": "ConnectionProbe",
+      "description": "Read-only health probe document for verifying Firestore connectivity at startup.",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "maxLength": 32
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/civic_records/{recordId}": {
+      "schema": { "$ref": "#/entities/CivicRecord" },
+      "description": "Publicly readable civic transparency overrides and admin-managed records across all 13 categories."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Restricted list of authorized BetterAlcala administrators."
+    },
+    "/test/connection": {
+      "schema": { "$ref": "#/entities/ConnectionProbe" },
+      "description": "Startup Firestore connectivity probe document."
+    }
+  }
+}
